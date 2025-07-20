@@ -580,7 +580,7 @@ function updatePlayerInfo() {
             </div>
         `;
     });
-    playerInfoDiv.innerHTML = infoHTML;
+    // playerInfoDiv.innerHTML = infoHTML;
 }
 
 // --- Event Handling ---
