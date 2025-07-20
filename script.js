@@ -1,3 +1,7 @@
+// --- Constants ---
+const LOGICAL_WIDTH = 1920;
+const LOGICAL_HEIGHT = 1080;
+
 // --- DOM Elements ---
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
@@ -120,9 +124,9 @@ function startGame() {
 function generateMap(numPlayers) {
     territories = [];
     const numTerritories = Math.max(12, numPlayers * 4);
-    const mapWidth = canvas.width;
-    const mapHeight = canvas.height;
-    const margin = 60; 
+    const mapWidth = LOGICAL_WIDTH;
+    const mapHeight = LOGICAL_HEIGHT;
+    const margin = 60;
 
     const points = generatePoissonPoints(mapWidth, mapHeight, numTerritories, margin);
     
@@ -278,7 +282,8 @@ function distributeTerritories(numPlayers) {
     let startingTerritories = [];
 
     if (numPlayers > 0) {
-        const w = canvas.width, h = canvas.height;
+        const w = LOGICAL_WIDTH;
+        const h = LOGICAL_HEIGHT;
         const cornerPoints = [
             {x: w, y: h}, // bottom-right
             {x: 0, y: 0}, // top-left
@@ -481,8 +486,19 @@ function gameLoop() {
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
+    ctx.save(); 
+
+    const scale = Math.min(canvas.width / LOGICAL_WIDTH, canvas.height / LOGICAL_HEIGHT);
+    const offsetX = (canvas.width - LOGICAL_WIDTH * scale) / 2;
+    const offsetY = (canvas.height - LOGICAL_HEIGHT * scale) / 2;
+
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+
+
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+
     ctx.lineWidth = 3;
     territories.forEach((t, i) => {
         t.connections.forEach(connIndex => {
@@ -542,6 +558,8 @@ function draw() {
         ctx.fillText(attack.units, currentX, currentY);
     });
     
+    ctx.restore();
+
     updatePlayerInfo();
 }
 
@@ -588,8 +606,14 @@ function handleCanvasClick(event) {
     if (!gameActive) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+
+    // --- Translate physical click coordinates to logical game coordinates ---
+    const scale = Math.min(canvas.width / LOGICAL_WIDTH, canvas.height / LOGICAL_HEIGHT);
+    const offsetX = (canvas.width - LOGICAL_WIDTH * scale) / 2;
+    const offsetY = (canvas.height - LOGICAL_HEIGHT * scale) / 2;
+
+    const x = (event.clientX - rect.left - offsetX) / scale;
+    const y = (event.clientY - rect.top - offsetY) / scale;
 
     for (const arrow of interactiveArrows) {
         if (Math.hypot(x - arrow.x, y - arrow.y) < 25) {
@@ -623,9 +647,6 @@ function handleCanvasClick(event) {
 function resizeCanvas() {
     canvas.width = gameContainer.clientWidth;
     canvas.height = gameContainer.clientHeight;
-    if(gameActive) {
-        startGame();
-    }
 }
 
 // --- Initial Setup ---
@@ -635,3 +656,6 @@ canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     handleCanvasClick(e.touches[0]);
 }, { passive: false });
+
+
+resizeCanvas();
