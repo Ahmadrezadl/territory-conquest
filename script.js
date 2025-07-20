@@ -61,11 +61,9 @@ unbalancedMapBtn.addEventListener('click', () => {
 playBtn.addEventListener('click', () => {
     settingsModal.style.display = 'none';
     gameContainer.classList.remove('hidden');
-    if (isMobile()) {
-        document.documentElement.requestFullscreen().catch(err => {
-            console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-        });
-    }
+    document.documentElement.requestFullscreen().catch(err => {
+        console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+    });
     startGame();
 });
 
