@@ -44,13 +44,16 @@ body {
 
 .modal-content {
     background: white;
-    color: #1f2937; /* text-gray-800 */
+    color: #1f2937;
     padding: 2.5rem;
     border-radius: 1.5rem;
-    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     width: 100%;
-    max-width: 28rem; /* max-w-md */
+    max-width: 32rem;
     margin: 1rem;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh; 
     transform: scale(0.95);
     opacity: 0;
     animation: fadeInScale 0.3s forwards ease-out;
@@ -210,6 +213,8 @@ body {
 }
 
 .player-list {
+    overflow-y: auto; 
+    flex-shrink: 1;  
     margin-bottom: 2rem;
     display: flex;
     flex-direction: column;
