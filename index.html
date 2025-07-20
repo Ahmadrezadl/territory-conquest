@@ -9,37 +9,23 @@
 </head>
 <body>
 
-    <!-- Settings Modal -->
     <div id="settings-modal" class="modal-backdrop">
         <div class="modal-content">
             <h1 class="modal-title">Territory Conquest</h1>
             <p class="modal-subtitle">Configure your game</p>
             
-            <div class="setting-group">
-                <label for="player-count" class="setting-label">Players: <span id="player-count-label">2</span></label>
-                <input type="range" id="player-count" min="1" max="10" value="2" class="slider">
-            </div>
-
-            <div class="setting-group">
-                <label for="bot-count" class="setting-label">Bots: <span id="bot-count-label">1</span></label>
-                <input type="range" id="bot-count" min="0" max="9" value="1" class="slider">
-            </div>
-
-            <div class="setting-group">
-                <label class="setting-label">Map Type:</label>
-                <div class="map-type-container">
-                    <button id="symmetrical-map-btn" class="map-type-btn btn active">Symmetrical</button>
-                    <button id="unbalanced-map-btn" class="map-type-btn btn">Unbalanced</button>
+            <div id="player-list" class="player-list">
                 </div>
-            </div>
 
-            <button id="play-btn" class="btn btn-primary">
-                Start Game
-            </button>
+            <div class="menu-actions">
+                <button id="add-player-btn" class="btn btn-secondary">Add Player</button>
+                <button id="play-btn" class="btn btn-primary">
+                    Start Game
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Game Over Modal -->
     <div id="game-over-modal" class="modal-backdrop hidden">
         <div class="modal-content text-center">
             <h2 id="winner-message" class="winner-message">Player 1 Wins!</h2>
@@ -50,13 +36,10 @@
         </div>
     </div>
     
-    <!-- Game UI -->
     <div id="game-container" class="hidden">
         <canvas id="game-canvas"></canvas>
-        <!-- <div id="player-info"></div> -->
     </div>
 
-    <!-- JavaScript Files -->
     <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
     <script src="script.js"></script>
 </body>

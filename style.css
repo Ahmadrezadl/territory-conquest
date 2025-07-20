@@ -208,3 +208,78 @@ body {
 .hidden {
     display: none !important;
 }
+
+.player-list {
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.player-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    background-color: #f3f4f6; /* bg-gray-100 */
+    border-radius: 0.75rem;
+}
+
+.player-row input[type="text"] {
+    flex-grow: 1;
+    border: 2px solid #d1d5db; /* border-gray-300 */
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+}
+
+.player-row input[type="color"] {
+    width: 40px;
+    height: 40px;
+    border: none;
+    padding: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    background-color: transparent;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+}
+
+
+.player-row .toggle-bot-btn, .player-row .remove-player-btn {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.player-row .toggle-bot-btn.is-bot {
+    background-color: #8b5cf6; /* bg-purple-500 */
+    color: white;
+}
+.player-row .toggle-bot-btn {
+    background-color: #3b82f6; /* bg-blue-500 */
+    color: white;
+}
+
+
+.player-row .remove-player-btn {
+    background-color: #ef4444; /* bg-red-500 */
+    color: white;
+}
+
+.menu-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 2rem;
+}
