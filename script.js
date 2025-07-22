@@ -3,6 +3,7 @@
 const LOGICAL_WIDTH = 1920;
 const LOGICAL_HEIGHT = 1080;
 const MIN_CONNECTION_ANGLE = (Math.PI / 180) * 45;
+const MIN_NODE_DISTANCE = 140; // <-- NEW: Minimum pixel distance between node centers
 
 // --- DOM Elements ---
 const canvas = document.getElementById('game-canvas');
@@ -21,7 +22,7 @@ const quitBtn = document.getElementById('quit-btn');
 let territories = [];
 let players = [];
 let activeAttacks = [];
-let playerSelections = []; // <-- NEW: Replaces selectedTerritory for per-player selections
+let playerSelections = [];
 let animationFrameId;
 let unitIntervalId;
 let botIntervalId;
@@ -157,7 +158,6 @@ function startGame() {
     }));
     
     activeAttacks = [];
-    // <-- NEW: Initialize selections for each player to null
     playerSelections = Array(players.length).fill(null);
 
     generateMap(players.length);
@@ -178,13 +178,17 @@ function startGame() {
 // --- Map Generation ---
 function generateMap(numPlayers) {
     territories = [];
-    const numTerritories = Math.max(15, numPlayers * 5);
+    // <-- FEWER NODES: Changed formula for a smaller map
+    const numTerritories = Math.max(12, numPlayers * 4);
     const mapWidth = LOGICAL_WIDTH;
     const mapHeight = LOGICAL_HEIGHT;
     const margin = 100;
 
-    const points = generatePoissonPoints(mapWidth, mapHeight, numTerritories, margin);
+    let points = generateGuaranteedEvenPoints(mapWidth, mapHeight, numTerritories, margin);
     
+    // <-- NEW: Enforce minimum distance between points after they are generated
+    enforceMinimumDistance(points, MIN_NODE_DISTANCE, mapWidth, mapHeight, margin);
+
     points.forEach(p => {
         const baseRadius = 55;
         territories.push({
@@ -326,77 +330,78 @@ function ensureConnectivity() {
     }
 }
 
-function generatePoissonPoints(width, height, count, margin) {
-    const k = 30;
-    const radius = Math.sqrt(((width - margin * 2) * (height - margin * 2)) / (count * Math.PI)) * 1.2;
-    const cellSize = radius / Math.sqrt(2);
-    const gridWidth = Math.ceil(width / cellSize);
-    const gridHeight = Math.ceil(height / cellSize);
-    const grid = new Array(gridWidth * gridHeight).fill(null);
+function generateGuaranteedEvenPoints(width, height, count, margin) {
     const points = [];
-    const active = [];
+    if (count === 0) return points;
 
-    function getRandomPoint() {
-        return {
-            x: margin + Math.random() * (width - 2 * margin),
-            y: margin + Math.random() * (height - 2 * margin)
-        };
+    const aspectRatio = (width - margin * 2) / (height - margin * 2);
+    const cols = Math.ceil(Math.sqrt(count * aspectRatio));
+    const rows = Math.ceil(count / cols);
+
+    const cellWidth = (width - margin * 2) / cols;
+    const cellHeight = (height - margin * 2) / rows;
+
+    const cells = [];
+    for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
+            cells.push({ row: i, col: j });
+        }
     }
 
-    function isValidPoint(p) {
-        if (p.x < margin || p.x >= width - margin || p.y < margin || p.y >= height - margin) return false;
-        const i = Math.floor(p.x / cellSize);
-        const j = Math.floor(p.y / cellSize);
-        for (let di = -1; di <= 1; di++) {
-            for (let dj = -1; dj <= 1; dj++) {
-                const ni = i + di;
-                const nj = j + dj;
-                if (ni >= 0 && ni < gridWidth && nj >= 0 && nj < gridHeight) {
-                    const neighbor = grid[nj * gridWidth + ni];
-                    if (neighbor && Math.hypot(p.x - neighbor.x, p.y - neighbor.y) < radius) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
+    for (let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
     }
 
-    function addPoint(p) {
-        points.push(p);
-        active.push(p);
-        const i = Math.floor(p.x / cellSize);
-        const j = Math.floor(p.y / cellSize);
-        grid[j * gridWidth + i] = p;
-    }
+    for (let i = 0; i < count; i++) {
+        const cell = cells[i];
+        if (!cell) continue;
 
-    const initialPoint = getRandomPoint();
-    addPoint(initialPoint);
+        const paddingX = cellWidth * 0.15;
+        const paddingY = cellHeight * 0.15;
 
-    while (active.length > 0 && points.length < count) {
-        const index = Math.floor(Math.random() * active.length);
-        const p = active[index];
-        let found = false;
-        for (let attempt = 0; attempt < k; attempt++) {
-            const angle = Math.random() * 2 * Math.PI;
-            const dist = radius + Math.random() * radius;
-            const newPoint = {
-                x: p.x + dist * Math.cos(angle),
-                y: p.y + dist * Math.sin(angle)
-            };
-            if (isValidPoint(newPoint)) {
-                addPoint(newPoint);
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            active.splice(index, 1);
-        }
+        const x = margin + cell.col * cellWidth + paddingX + (Math.random() * (cellWidth - paddingX * 2));
+        const y = margin + cell.row * cellHeight + paddingY + (Math.random() * (cellHeight - paddingY * 2));
+
+        points.push({ x, y });
     }
 
     return points;
 }
+
+// <-- NEW FUNCTION to enforce minimum distance
+function enforceMinimumDistance(points, minDistance, width, height, margin) {
+    const iterations = 10;
+    for (let iter = 0; iter < iterations; iter++) {
+        for (let i = 0; i < points.length; i++) {
+            for (let j = i + 1; j < points.length; j++) {
+                const p1 = points[i];
+                const p2 = points[j];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.hypot(dx, dy);
+
+                if (distance < minDistance) {
+                    const overlap = minDistance - distance;
+                    const adjustX = (dx / distance) * overlap * 0.5;
+                    const adjustY = (dy / distance) * overlap * 0.5;
+
+                    p1.x -= adjustX;
+                    p1.y -= adjustY;
+                    p2.x += adjustX;
+                    p2.y += adjustY;
+                }
+            }
+        }
+    }
+
+    // Clamp points to stay within the margins after nudging them
+    points.forEach(p => {
+        p.x = Math.max(margin, Math.min(width - margin, p.x));
+        p.y = Math.max(margin, Math.min(height - margin, p.y));
+    });
+}
+
 
 // --- Territory Distribution ---
 function distributeTerritories(numPlayers) {
@@ -635,7 +640,6 @@ function draw() {
             ctx.shadowBlur = 0;
         }
 
-        // <-- MODIFIED: Draw selection outline based on the new playerSelections array
         if (playerSelections.includes(t)) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 6;
@@ -677,15 +681,12 @@ function draw() {
     ctx.restore();
 }
 
-// <-- MODIFIED: Draw arrows for all players who have a selection
 function drawInteractiveArrows() {
     playerSelections.forEach(selectedTerritory => {
-        // If this player has no selection, skip to the next
         if (!selectedTerritory) {
             return;
         }
 
-        // Draw arrows for the current player's selection
         selectedTerritory.connections.forEach(connIndex => {
             const from = selectedTerritory;
             const to = territories[connIndex];
@@ -713,7 +714,6 @@ function drawInteractiveArrows() {
     });
 }
 
-// <-- MODIFIED: The entire click handling logic is new
 function handleCanvasClick(event) {
     if (!gameActive) return;
 
@@ -738,10 +738,9 @@ function handleCanvasClick(event) {
     }
 
     // --- Arrow Click Detection ---
-    // We must check if the click hit any arrow from any selected player.
     for (let playerId = 0; playerId < playerSelections.length; playerId++) {
         const selectedTerritory = playerSelections[playerId];
-        if (!selectedTerritory) continue; // Skip if this player hasn't selected anything
+        if (!selectedTerritory) continue;
 
         for (const connIndex of selectedTerritory.connections) {
             const from = selectedTerritory;
@@ -754,9 +753,8 @@ function handleCanvasClick(event) {
 
             if (Math.hypot(logicalX - arrowX, logicalY - arrowY) < 40) {
                 launchAttack(from, to);
-                // Clear the selection for the player who just attacked
                 playerSelections[playerId] = null;
-                return; // Action is complete, exit the function
+                return;
             }
         }
     }
@@ -767,18 +765,14 @@ function handleCanvasClick(event) {
     if (clickedTerritory) {
         const ownerId = clickedTerritory.owner;
 
-        // Check if the clicked territory is owned by a human player
         if (ownerId !== null && !players[ownerId].isBot) {
-            // If this player has already selected this territory, deselect it.
             if (playerSelections[ownerId] === clickedTerritory) {
                 playerSelections[ownerId] = null;
             } else {
-                // Otherwise, select it for this player.
                 playerSelections[ownerId] = clickedTerritory;
             }
         }
     }
-    // If empty space is clicked, do nothing.
 }
 
 // --- Canvas Resizing ---
