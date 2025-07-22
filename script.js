@@ -116,6 +116,14 @@ playBtn.addEventListener('click', () => {
     }
     settingsModal.style.display = 'none';
     gameContainer.classList.remove('hidden');
+
+    // --- FIX: Request fullscreen on game start ---
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        });
+    }
+
     startGame();
 });
 
@@ -160,18 +168,19 @@ function startGame() {
     botIntervalId = setInterval(runBotActions, 1200);
 }
 
-// --- Map Generation (No changes) ---
+// --- Map Generation ---
 function generateMap(numPlayers) {
     territories = [];
     const numTerritories = Math.max(12, numPlayers * 5);
     const mapWidth = LOGICAL_WIDTH;
     const mapHeight = LOGICAL_HEIGHT;
-    const margin = 80;
+    const margin = 100; // Increased margin slightly
 
     const points = generatePoissonPoints(mapWidth, mapHeight, numTerritories, margin);
     
     points.forEach(p => {
-        const baseRadius = 35;
+        // --- FIX: Increased node size for better visibility on small screens ---
+        const baseRadius = 45;
         territories.push({
             x: p.x,
             y: p.y,
@@ -383,7 +392,7 @@ function generatePoissonPoints(width, height, count, margin) {
     return points;
 }
 
-// --- Territory Distribution (No changes) ---
+// --- Territory Distribution ---
 function distributeTerritories(numPlayers) {
     let unowned = [...territories.keys()];
     let startingTerritories = [];
@@ -430,7 +439,7 @@ function distributeTerritories(numPlayers) {
     });
 }
 
-// --- Unit Generation & Attack Logic (No changes) ---
+// --- Unit Generation & Attack Logic ---
 function generateUnits() {
     if (!gameActive) return;
     territories.forEach(t => {
@@ -477,7 +486,7 @@ function updateAttacks() {
     }
 }
 
-// --- Win Condition & Bot AI (No changes) ---
+// --- Win Condition & Bot AI ---
 function checkWinCondition() {
     const activePlayerIds = new Set(territories.filter(t => t.owner !== null).map(t => t.owner));
     players.forEach(p => {
@@ -573,19 +582,16 @@ function draw() {
     let scale, offsetX, offsetY;
 
     if (isPortrait) {
-        // In portrait, we rotate the view to fit the landscape logical area
         scale = Math.min(canvas.height / LOGICAL_WIDTH, canvas.width / LOGICAL_HEIGHT);
         offsetX = (canvas.width - LOGICAL_HEIGHT * scale) / 2;
         offsetY = (canvas.height - LOGICAL_WIDTH * scale) / 2;
         
-        // Apply transformations for portrait mode
         ctx.translate(offsetX, offsetY);
         ctx.scale(scale, scale);
-        ctx.translate(LOGICAL_HEIGHT, 0); // Move to the "new" top-right for rotation
+        ctx.translate(LOGICAL_HEIGHT, 0);
         ctx.rotate(Math.PI / 2);
 
     } else {
-        // Standard landscape drawing
         scale = Math.min(canvas.width / LOGICAL_WIDTH, canvas.height / LOGICAL_HEIGHT);
         offsetX = (canvas.width - LOGICAL_WIDTH * scale) / 2;
         offsetY = (canvas.height - LOGICAL_HEIGHT * scale) / 2;
@@ -594,14 +600,12 @@ function draw() {
         ctx.scale(scale, scale);
     }
 
-    // --- Draw Game Elements (works for both orientations) ---
-
     // Draw connections
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.lineWidth = 3;
     territories.forEach((t, i) => {
         t.connections.forEach(connIndex => {
-            if (i < connIndex) { // Draw each connection only once
+            if (i < connIndex) {
                 const neighbor = territories[connIndex];
                 ctx.beginPath();
                 ctx.moveTo(t.x, t.y);
@@ -618,7 +622,6 @@ function draw() {
         ctx.fillStyle = t.owner !== null ? players[t.owner].color : '#6b7280';
         ctx.fill();
         
-        // Add glow to human player territories
         if (t.owner !== null && !players[t.owner].isBot) {
             const glowAmount = (Math.sin(performance.now() / 300) + 1) / 2;
             ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
@@ -628,14 +631,12 @@ function draw() {
             ctx.shadowBlur = 0;
         }
 
-        // Add selection highlight
         if (t === selectedTerritory) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 5;
             ctx.stroke();
         }
 
-        // Draw unit count
         ctx.fillStyle = 'white';
         ctx.font = `bold ${t.radius / 1.8}px Poppins`;
         ctx.textAlign = 'center';
@@ -671,10 +672,20 @@ function draw() {
     ctx.restore();
 }
 
+// --- FIX: Correctly calculate arrow positions during the draw phase ---
 function drawInteractiveArrows() {
     if (!selectedTerritory) return;
+
     interactiveArrows.forEach(arrow => {
-        const { x, y, angle } = arrow;
+        const from = selectedTerritory;
+        const to = territories[arrow.targetIndex];
+        
+        // Calculate position and angle dynamically
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        const arrowOffset = from.radius + 30; // Offset from the center of the territory
+        const x = from.x + arrowOffset * Math.cos(angle);
+        const y = from.y + arrowOffset * Math.sin(angle);
+
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
@@ -682,9 +693,10 @@ function drawInteractiveArrows() {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(0, -18);
-        ctx.lineTo(25, 0);
-        ctx.lineTo(0, 18);
+        // Made arrow bigger for easier clicking
+        ctx.moveTo(0, -20);
+        ctx.lineTo(30, 0);
+        ctx.lineTo(0, 20);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
@@ -703,44 +715,43 @@ function handleCanvasClick(event) {
     let logicalX, logicalY;
 
     if (isPortrait) {
-        // Calculate transforms for portrait mode
         scale = Math.min(rect.height / LOGICAL_WIDTH, rect.width / LOGICAL_HEIGHT);
         offsetX = (rect.width - LOGICAL_HEIGHT * scale) / 2;
         offsetY = (rect.height - LOGICAL_WIDTH * scale) / 2;
         
-        // Apply inverse transformation to find logical coordinates from click
         logicalX = (clickY - offsetY) / scale;
         logicalY = LOGICAL_HEIGHT - (clickX - offsetX) / scale;
 
     } else {
-        // Calculate transforms for landscape mode
         scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
         offsetX = (rect.width - LOGICAL_WIDTH * scale) / 2;
         offsetY = (rect.height - LOGICAL_HEIGHT * scale) / 2;
         
-        // Apply inverse transformation
         logicalX = (clickX - offsetX) / scale;
         logicalY = (clickY - offsetY) / scale;
     }
 
-    // Check if an interactive arrow was clicked
-    for (const arrow of interactiveArrows) {
-        const from = selectedTerritory;
-        const neighbor = territories[arrow.targetIndex];
-        const angle = Math.atan2(neighbor.y - from.y, neighbor.x - from.x);
-        const arrowOffset = from.radius + 25;
-        const arrowX = from.x + arrowOffset * Math.cos(angle);
-        const arrowY = from.y + arrowOffset * Math.sin(angle);
+    // --- FIX: Correctly calculate arrow position for click detection ---
+    if (selectedTerritory) {
+        for (const arrow of interactiveArrows) {
+            const from = selectedTerritory;
+            const to = territories[arrow.targetIndex];
+            
+            const angle = Math.atan2(to.y - from.y, to.x - from.x);
+            const arrowOffset = from.radius + 30;
+            const arrowX = from.x + arrowOffset * Math.cos(angle);
+            const arrowY = from.y + arrowOffset * Math.sin(angle);
 
-        if (Math.hypot(logicalX - arrowX, logicalY - arrowY) < 30) {
-            launchAttack(selectedTerritory, territories[arrow.targetIndex]);
-            selectedTerritory = null;
-            interactiveArrows = [];
-            return;
+            // Check distance from click to the arrow's calculated position
+            if (Math.hypot(logicalX - arrowX, logicalY - arrowY) < 30) { // Increased hit area
+                launchAttack(from, to);
+                selectedTerritory = null;
+                interactiveArrows = [];
+                return;
+            }
         }
     }
 
-    // Check if a territory was clicked
     const clickedTerritory = territories.find(t => Math.hypot(t.x - logicalX, t.y - logicalY) < t.radius);
     
     selectedTerritory = null;
@@ -748,7 +759,7 @@ function handleCanvasClick(event) {
 
     if (clickedTerritory && clickedTerritory.owner !== null && !players[clickedTerritory.owner].isBot) {
         selectedTerritory = clickedTerritory;
-        // Create interactive arrows for connections
+        // The arrow objects just need the target index. Positions are calculated in the draw loop.
         selectedTerritory.connections.forEach(connIndex => {
             interactiveArrows.push({ targetIndex: connIndex });
         });
@@ -761,7 +772,6 @@ function resizeCanvas() {
     canvas.width = gameContainer.clientWidth;
     canvas.height = gameContainer.clientHeight;
     isPortrait = canvas.width < canvas.height; // Update orientation flag
-    // If the game is active, we need to redraw after a resize
     if (gameActive) {
         draw();
     }

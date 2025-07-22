@@ -130,6 +130,7 @@ body {
     font-size: 1rem;
     font-weight: 500;
     font-family: 'Poppins', sans-serif;
+    min-width: 100px;
 }
 
 .player-row input[type="color"] {
@@ -263,8 +264,8 @@ input[type="color"]::-webkit-color-swatch {
     display: none !important;
 }
 
-/* Responsive styles for portrait/narrow screens */
-@media (max-width: 600px) {
+/* Responsive styles for portrait mode */
+@media (max-width: 600px) and (orientation: portrait) {
     .player-row {
         flex-wrap: wrap; /* Allow items to wrap */
         gap: 0.75rem; /* Adjust gap for wrapped layout */
@@ -286,5 +287,24 @@ input[type="color"]::-webkit-color-swatch {
 
     .player-row .remove-player-btn {
         order: 4; /* Remove button last */
+    }
+}
+
+/* Responsive styles for landscape on narrow devices (phones) */
+@media (max-height: 500px) and (orientation: landscape) {
+    .modal-content {
+        padding: 1.5rem; /* Reduce padding on narrow landscape */
+        max-height: 95vh;
+    }
+    .player-row {
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+    }
+    .player-row input[type="text"] {
+        flex-grow: 1;
+        flex-basis: 150px; /* Give it a base width */
+    }
+    .player-row .toggle-container {
+        flex-shrink: 0; /* Prevent toggle from shrinking */
     }
 }
