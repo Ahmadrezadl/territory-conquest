@@ -8,7 +8,7 @@ A minimalist real-time strategy game of expansion and domination. Customize your
 
 ---
 
-![Territory Conquest Gameplay](https://i.imgur.com/gI2F1iL.png)
+![Territory Conquest Logo](logo.png)
 
 ## About the Game
 
