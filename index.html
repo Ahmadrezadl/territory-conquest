@@ -8,38 +8,39 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
+    <!-- Settings menu modal -->
     <div id="settings-modal" class="modal-backdrop">
         <div class="modal-content">
             <h1 class="modal-title">Territory Conquest</h1>
             <p class="modal-subtitle">Configure your game</p>
             
             <div id="player-list" class="player-list">
-                </div>
+                <!-- Player rows will be dynamically added here -->
+            </div>
 
             <div class="menu-actions">
                 <button id="add-player-btn" class="btn btn-secondary">Add Player</button>
-                <button id="play-btn" class="btn btn-primary">
-                    Start Game
-                </button>
+                <button id="play-btn" class="btn btn-primary">Start Game</button>
             </div>
         </div>
     </div>
 
+    <!-- Game over modal -->
     <div id="game-over-modal" class="modal-backdrop hidden">
         <div class="modal-content text-center">
             <h2 id="winner-message" class="winner-message">Player 1 Wins!</h2>
             <p class="modal-subtitle">Congratulations!</p>
-            <button id="restart-btn" class="btn btn-secondary">
-                Play Again
-            </button>
+            <button id="restart-btn" class="btn btn-secondary">Play Again</button>
         </div>
     </div>
     
+    <!-- Main game container -->
     <div id="game-container" class="hidden">
         <canvas id="game-canvas"></canvas>
+        <div id="player-info"></div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
     <script src="script.js"></script>
 </body>

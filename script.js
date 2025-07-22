@@ -1,4 +1,5 @@
 // --- Constants ---
+// Logical game dimensions (always landscape)
 const LOGICAL_WIDTH = 1920;
 const LOGICAL_HEIGHT = 1080;
 const MIN_CONNECTION_ANGLE = (Math.PI / 180) * 45;
@@ -25,6 +26,7 @@ let animationFrameId;
 let unitIntervalId;
 let botIntervalId;
 let gameActive = false;
+let isPortrait = false; // Flag for screen orientation
 
 const DEFAULT_PLAYER_COLORS = [
     '#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6',
@@ -33,6 +35,7 @@ const DEFAULT_PLAYER_COLORS = [
 
 let menuPlayers = [];
 
+// --- Local Storage Functions ---
 function saveMenuPlayers() {
     localStorage.setItem('territoryConquestPlayers', JSON.stringify(menuPlayers));
 }
@@ -42,6 +45,7 @@ function loadMenuPlayers() {
     if (saved) {
         menuPlayers = JSON.parse(saved);
     } else {
+        // Default players for first-time load
         menuPlayers = [
             { name: 'Player 1', color: DEFAULT_PLAYER_COLORS[0], isBot: false },
             { name: 'Bot 1', color: DEFAULT_PLAYER_COLORS[1], isBot: true }
@@ -49,16 +53,25 @@ function loadMenuPlayers() {
     }
 }
 
+// --- Player List Rendering ---
 function renderPlayerList() {
     playerListDiv.innerHTML = '';
     menuPlayers.forEach((player, index) => {
         const playerRow = document.createElement('div');
         playerRow.className = 'player-row';
+        playerRow.style.animationDelay = `${index * 50}ms`;
         playerRow.innerHTML = `
-            <input type="color" value="${player.color}">
+            <input type="color" value="${player.color}" title="Player Color">
             <input type="text" value="${player.name}" placeholder="Player Name">
-            <button class="toggle-bot-btn ${player.isBot ? 'is-bot' : ''}">${player.isBot ? 'Bot' : 'Human'}</button>
-            <button class="remove-player-btn">X</button>
+            <div class="toggle-container">
+                <span>Human</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${player.isBot ? 'checked' : ''}>
+                    <span class="slider"></span>
+                </label>
+                <span>Bot</span>
+            </div>
+            <button class="remove-player-btn" title="Remove Player">X</button>
         `;
 
         playerRow.querySelector('input[type="color"]').addEventListener('input', (e) => {
@@ -69,10 +82,9 @@ function renderPlayerList() {
             player.name = e.target.value;
             saveMenuPlayers();
         });
-        playerRow.querySelector('.toggle-bot-btn').addEventListener('click', () => {
-            player.isBot = !player.isBot;
+        playerRow.querySelector('.toggle-switch input').addEventListener('change', (e) => {
+            player.isBot = e.target.checked;
             saveMenuPlayers();
-            renderPlayerList();
         });
         playerRow.querySelector('.remove-player-btn').addEventListener('click', () => {
             if (menuPlayers.length > 2) {
@@ -86,6 +98,7 @@ function renderPlayerList() {
     });
 }
 
+// --- Event Listeners for Buttons ---
 addPlayerBtn.addEventListener('click', () => {
     if (menuPlayers.length < 10) {
         const newPlayerName = `Player ${menuPlayers.length + 1}`;
@@ -103,9 +116,6 @@ playBtn.addEventListener('click', () => {
     }
     settingsModal.style.display = 'none';
     gameContainer.classList.remove('hidden');
-    document.documentElement.requestFullscreen().catch(err => {
-        console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-    });
     startGame();
 });
 
@@ -119,8 +129,9 @@ restartBtn.addEventListener('click', () => {
     gameActive = false;
 });
 
+// --- Game Initialization ---
 function startGame() {
-    resizeCanvas();
+    resizeCanvas(); // Initial resize and orientation check
     
     players = menuPlayers.map((p, index) => ({
         id: index,
@@ -149,6 +160,7 @@ function startGame() {
     botIntervalId = setInterval(runBotActions, 1200);
 }
 
+// --- Map Generation (No changes) ---
 function generateMap(numPlayers) {
     territories = [];
     const numTerritories = Math.max(12, numPlayers * 5);
@@ -171,8 +183,8 @@ function generateMap(numPlayers) {
         });
     });
     
-    const delaunay = d3.Delaunay.from(territories.map(t => [t.x, t.y]));
-    const { halfedges, triangles } = delaunay;
+    const UNPACKED = d3.Delaunay.from(territories.map(t => [t.x, t.y]));
+    const { halfedges, triangles } = UNPACKED;
     for (let i = 0; i < halfedges.length; i++) {
         const j = halfedges[i];
         if (j > i) {
@@ -275,27 +287,26 @@ function ensureConnectivity() {
             }
         });
     }
-    if (visited.size < territories.length) {
-        const mainGroup = Array.from(visited);
-        const isolatedGroup = territories.map((_, i) => i).filter(i => !visited.has(i));
-        isolatedGroup.forEach(isoIndex => {
-            let closestDist = Infinity;
-            let closestMainIndex = -1;
-            mainGroup.forEach(mainIndex => {
-                const dist = Math.hypot(
-                    territories[isoIndex].x - territories[mainIndex].x,
-                    territories[isoIndex].y - territories[mainIndex].y
-                );
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    closestMainIndex = mainIndex;
-                }
-            });
-            if (closestMainIndex !== -1) {
-                territories[isoIndex].connections.push(closestMainIndex);
-                territories[closestMainIndex].connections.push(isoIndex);
+    const isolatedTerritories = territories.map((_, i) => i).filter(i => !visited.has(i));
+    isolatedTerritories.forEach(isoIndex => {
+        let closestDist = Infinity;
+        let closestMainIndex = -1;
+        visited.forEach(mainIndex => {
+            const dist = Math.hypot(
+                territories[isoIndex].x - territories[mainIndex].x,
+                territories[isoIndex].y - territories[mainIndex].y
+            );
+            if (dist < closestDist) {
+                closestDist = dist;
+                closestMainIndex = mainIndex;
             }
         });
+        if (closestMainIndex !== -1) {
+            territories[isoIndex].connections.push(closestMainIndex);
+            territories[closestMainIndex].connections.push(isoIndex);
+        }
+    });
+    if (isolatedTerritories.length > 0) {
         ensureConnectivity();
     }
 }
@@ -303,65 +314,76 @@ function ensureConnectivity() {
 function generatePoissonPoints(width, height, count, margin) {
     const k = 30;
     const radius = Math.sqrt(((width - margin * 2) * (height - margin * 2)) / (count * Math.PI)) * 1.5;
-    const radius2 = radius * radius;
-    const R = 3 * radius2;
-    const cellSize = radius * Math.SQRT1_2;
+    const cellSize = radius / Math.sqrt(2);
     const gridWidth = Math.ceil(width / cellSize);
     const gridHeight = Math.ceil(height / cellSize);
-    const grid = new Array(gridWidth * gridHeight);
-    const queue = [];
+    const grid = new Array(gridWidth * gridHeight).fill(null);
     const points = [];
-    function sample(x, y) {
-        const p = { x, y };
-        queue.push(p);
-        const i = Math.floor(x / cellSize);
-        const j = Math.floor(y / cellSize);
-        grid[j * gridWidth + i] = p;
-        points.push(p);
-        return p;
+    const active = [];
+
+    function getRandomPoint() {
+        return {
+            x: margin + Math.random() * (width - 2 * margin),
+            y: margin + Math.random() * (height - 2 * margin)
+        };
     }
-    sample(width / 2, height / 2);
-    while (queue.length > 0 && points.length < count) {
-        const i = Math.floor(Math.random() * queue.length);
-        const p = queue[i];
-        for (let j = 0; j < k; j++) {
-            const a = 2 * Math.PI * Math.random();
-            const r = Math.sqrt(Math.random() * R + radius2);
-            const x = p.x + r * Math.cos(a);
-            const y = p.y + r * Math.sin(a);
-            if (x > margin && x < width - margin && y > margin && y < height - margin && isFar(x, y)) {
-                sample(x, y);
-            }
-        }
-        if (queue.length > 1) {
-            queue[i] = queue.pop();
-        } else {
-            queue.pop();
-        }
-    }
-    function isFar(x, y) {
-        const i = Math.floor(x / cellSize);
-        const j = Math.floor(y / cellSize);
-        const i0 = Math.max(i - 2, 0);
-        const j0 = Math.max(j - 2, 0);
-        const i1 = Math.min(i + 3, gridWidth);
-        const j1 = Math.min(j + 3, gridHeight);
-        for (let j_ = j0; j_ < j1; j_++) {
-            const o = j_ * gridWidth;
-            for (let i_ = i0; i_ < i1; i_++) {
-                const s = grid[o + i_];
-                if (s) {
-                    const dx = s.x - x;
-                    const dy = s.y - y;
-                    if (dx * dx + dy * dy < radius2) return false;
+
+    function isValidPoint(p) {
+        if (p.x < margin || p.x >= width - margin || p.y < margin || p.y >= height - margin) return false;
+        const i = Math.floor(p.x / cellSize);
+        const j = Math.floor(p.y / cellSize);
+        for (let di = -1; di <= 1; di++) {
+            for (let dj = -1; dj <= 1; dj++) {
+                const ni = i + di;
+                const nj = j + dj;
+                if (ni >= 0 && ni < gridWidth && nj >= 0 && nj < gridHeight) {
+                    const neighbor = grid[nj * gridWidth + ni];
+                    if (neighbor && Math.hypot(p.x - neighbor.x, p.y - neighbor.y) < radius) {
+                        return false;
+                    }
                 }
             }
         }
         return true;
     }
+
+    function addPoint(p) {
+        points.push(p);
+        active.push(p);
+        const i = Math.floor(p.x / cellSize);
+        const j = Math.floor(p.y / cellSize);
+        grid[j * gridWidth + i] = p;
+    }
+
+    const initialPoint = getRandomPoint();
+    addPoint(initialPoint);
+
+    while (active.length > 0 && points.length < count) {
+        const index = Math.floor(Math.random() * active.length);
+        const p = active[index];
+        let found = false;
+        for (let attempt = 0; attempt < k; attempt++) {
+            const angle = Math.random() * 2 * Math.PI;
+            const dist = radius + Math.random() * radius;
+            const newPoint = {
+                x: p.x + dist * Math.cos(angle),
+                y: p.y + dist * Math.sin(angle)
+            };
+            if (isValidPoint(newPoint)) {
+                addPoint(newPoint);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            active.splice(index, 1);
+        }
+    }
+
     return points;
 }
 
+// --- Territory Distribution (No changes) ---
 function distributeTerritories(numPlayers) {
     let unowned = [...territories.keys()];
     let startingTerritories = [];
@@ -408,6 +430,7 @@ function distributeTerritories(numPlayers) {
     });
 }
 
+// --- Unit Generation & Attack Logic (No changes) ---
 function generateUnits() {
     if (!gameActive) return;
     territories.forEach(t => {
@@ -432,7 +455,7 @@ function launchAttack(from, to) {
 }
 
 function updateAttacks() {
-    const duration = 1000;
+    const duration = 1000; // milliseconds
     const now = performance.now();
     for (let i = activeAttacks.length - 1; i >= 0; i--) {
         const attack = activeAttacks[i];
@@ -454,6 +477,7 @@ function updateAttacks() {
     }
 }
 
+// --- Win Condition & Bot AI (No changes) ---
 function checkWinCondition() {
     const activePlayerIds = new Set(territories.filter(t => t.owner !== null).map(t => t.owner));
     players.forEach(p => {
@@ -486,7 +510,7 @@ function runBotActions() {
         const myTerritories = territories.filter(t => t.owner === player.id);
         if (myTerritories.length === 0) return;
         const actionRoll = Math.random();
-        if (actionRoll < 0.6) {
+        if (actionRoll < 0.6) { // Attack
             const possibleAttacks = [];
             myTerritories.forEach(from => {
                 if (from.units > 10) {
@@ -503,7 +527,7 @@ function runBotActions() {
                 possibleAttacks.sort((a, b) => b.score - a.score);
                 launchAttack(possibleAttacks[0].from, possibleAttacks[0].to);
             }
-        } else if (actionRoll < 0.9) {
+        } else if (actionRoll < 0.9) { // Reinforce
             const vulnerableTerritories = myTerritories.filter(t => {
                 return t.connections.some(c => territories[c].owner !== player.id && territories[c].units > t.units);
             }).sort((a, b) => a.units - b.units);
@@ -517,7 +541,7 @@ function runBotActions() {
                     launchAttack(potentialReinforcers[0], target);
                 }
             }
-        } else {
+        } else { // Consolidate
             const backlineTerritories = myTerritories.filter(t =>
                 t.units > 25 && t.connections.every(c => territories[c].owner === player.id)
             ).sort((a, b) => b.units - a.units);
@@ -531,6 +555,7 @@ function runBotActions() {
     });
 }
 
+// --- Game Loop ---
 function gameLoop() {
     updateAttacks();
     draw();
@@ -540,21 +565,43 @@ function gameLoop() {
     }
 }
 
+// --- Drawing Functions ---
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
 
-    const scale = Math.min(canvas.width / LOGICAL_WIDTH, canvas.height / LOGICAL_HEIGHT);
-    const offsetX = (canvas.width - LOGICAL_WIDTH * scale) / 2;
-    const offsetY = (canvas.height - LOGICAL_HEIGHT * scale) / 2;
-    ctx.translate(offsetX, offsetY);
-    ctx.scale(scale, scale);
+    let scale, offsetX, offsetY;
 
+    if (isPortrait) {
+        // In portrait, we rotate the view to fit the landscape logical area
+        scale = Math.min(canvas.height / LOGICAL_WIDTH, canvas.width / LOGICAL_HEIGHT);
+        offsetX = (canvas.width - LOGICAL_HEIGHT * scale) / 2;
+        offsetY = (canvas.height - LOGICAL_WIDTH * scale) / 2;
+        
+        // Apply transformations for portrait mode
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+        ctx.translate(LOGICAL_HEIGHT, 0); // Move to the "new" top-right for rotation
+        ctx.rotate(Math.PI / 2);
+
+    } else {
+        // Standard landscape drawing
+        scale = Math.min(canvas.width / LOGICAL_WIDTH, canvas.height / LOGICAL_HEIGHT);
+        offsetX = (canvas.width - LOGICAL_WIDTH * scale) / 2;
+        offsetY = (canvas.height - LOGICAL_HEIGHT * scale) / 2;
+        
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+    }
+
+    // --- Draw Game Elements (works for both orientations) ---
+
+    // Draw connections
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.lineWidth = 3;
     territories.forEach((t, i) => {
         t.connections.forEach(connIndex => {
-            if (i < connIndex) {
+            if (i < connIndex) { // Draw each connection only once
                 const neighbor = territories[connIndex];
                 ctx.beginPath();
                 ctx.moveTo(t.x, t.y);
@@ -564,12 +611,14 @@ function draw() {
         });
     });
 
+    // Draw territories
     territories.forEach(t => {
         ctx.beginPath();
         ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
         ctx.fillStyle = t.owner !== null ? players[t.owner].color : '#6b7280';
         ctx.fill();
         
+        // Add glow to human player territories
         if (t.owner !== null && !players[t.owner].isBot) {
             const glowAmount = (Math.sin(performance.now() / 300) + 1) / 2;
             ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
@@ -579,12 +628,14 @@ function draw() {
             ctx.shadowBlur = 0;
         }
 
+        // Add selection highlight
         if (t === selectedTerritory) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 5;
             ctx.stroke();
         }
 
+        // Draw unit count
         ctx.fillStyle = 'white';
         ctx.font = `bold ${t.radius / 1.8}px Poppins`;
         ctx.textAlign = 'center';
@@ -597,6 +648,7 @@ function draw() {
 
     drawInteractiveArrows();
 
+    // Draw attacks
     activeAttacks.forEach(attack => {
         const from = territories[attack.from];
         const to = territories[attack.to];
@@ -617,7 +669,6 @@ function draw() {
     });
 
     ctx.restore();
-    updatePlayerInfo();
 }
 
 function drawInteractiveArrows() {
@@ -641,72 +692,90 @@ function drawInteractiveArrows() {
     });
 }
 
-function updatePlayerInfo() {
-    // This part is commented out as it wasn't in the final HTML.
-    // You can add a <div id="player-info"></div> back to your HTML to use it.
-    /*
-    let infoHTML = '';
-    players.filter(p => p.isAlive).forEach(p => {
-        const territoryCount = territories.filter(t => t.owner === p.id).length;
-        const unitCount = territories.filter(t => t.owner === p.id).reduce((sum, t) => sum + t.units, 0);
-        infoHTML += `
-            <div class="player-info-row">
-                <span class="player-color-dot" style="background-color: ${p.color};"></span>
-                <span class="player-info-text">${p.name}:</span>
-                <span class="player-info-stats">${territoryCount} Terr. / ${Math.floor(unitCount)} Units</span>
-            </div>
-        `;
-    });
-    // const playerInfoDiv = document.getElementById('player-info');
-    // if (playerInfoDiv) playerInfoDiv.innerHTML = infoHTML;
-    */
-}
-
+// --- Canvas Interaction ---
 function handleCanvasClick(event) {
     if (!gameActive) return;
+
     const rect = canvas.getBoundingClientRect();
-    const scale = Math.min(canvas.width / LOGICAL_WIDTH, canvas.height / LOGICAL_HEIGHT);
-    const offsetX = (canvas.width - LOGICAL_WIDTH * scale) / 2;
-    const offsetY = (canvas.height - LOGICAL_HEIGHT * scale) / 2;
-    const x = (event.clientX - rect.left - offsetX) / scale;
-    const y = (event.clientY - rect.top - offsetY) / scale;
+    let scale, offsetX, offsetY;
+    let clickX = event.clientX - rect.left;
+    let clickY = event.clientY - rect.top;
+    let logicalX, logicalY;
+
+    if (isPortrait) {
+        // Calculate transforms for portrait mode
+        scale = Math.min(rect.height / LOGICAL_WIDTH, rect.width / LOGICAL_HEIGHT);
+        offsetX = (rect.width - LOGICAL_HEIGHT * scale) / 2;
+        offsetY = (rect.height - LOGICAL_WIDTH * scale) / 2;
+        
+        // Apply inverse transformation to find logical coordinates from click
+        logicalX = (clickY - offsetY) / scale;
+        logicalY = LOGICAL_HEIGHT - (clickX - offsetX) / scale;
+
+    } else {
+        // Calculate transforms for landscape mode
+        scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
+        offsetX = (rect.width - LOGICAL_WIDTH * scale) / 2;
+        offsetY = (rect.height - LOGICAL_HEIGHT * scale) / 2;
+        
+        // Apply inverse transformation
+        logicalX = (clickX - offsetX) / scale;
+        logicalY = (clickY - offsetY) / scale;
+    }
+
+    // Check if an interactive arrow was clicked
     for (const arrow of interactiveArrows) {
-        if (Math.hypot(x - arrow.x, y - arrow.y) < 25) {
+        const from = selectedTerritory;
+        const neighbor = territories[arrow.targetIndex];
+        const angle = Math.atan2(neighbor.y - from.y, neighbor.x - from.x);
+        const arrowOffset = from.radius + 25;
+        const arrowX = from.x + arrowOffset * Math.cos(angle);
+        const arrowY = from.y + arrowOffset * Math.sin(angle);
+
+        if (Math.hypot(logicalX - arrowX, logicalY - arrowY) < 30) {
             launchAttack(selectedTerritory, territories[arrow.targetIndex]);
             selectedTerritory = null;
             interactiveArrows = [];
             return;
         }
     }
-    const clickedTerritory = territories.find(t => Math.hypot(t.x - x, t.y - y) < t.radius);
+
+    // Check if a territory was clicked
+    const clickedTerritory = territories.find(t => Math.hypot(t.x - logicalX, t.y - logicalY) < t.radius);
+    
     selectedTerritory = null;
     interactiveArrows = [];
+
     if (clickedTerritory && clickedTerritory.owner !== null && !players[clickedTerritory.owner].isBot) {
         selectedTerritory = clickedTerritory;
+        // Create interactive arrows for connections
         selectedTerritory.connections.forEach(connIndex => {
-            const neighbor = territories[connIndex];
-            const from = selectedTerritory;
-            const angle = Math.atan2(neighbor.y - from.y, neighbor.x - from.x);
-            const arrowOffset = from.radius + 25;
-            const posX = from.x + arrowOffset * Math.cos(angle);
-            const posY = from.y + arrowOffset * Math.sin(angle);
-            interactiveArrows.push({ x: posX, y: posY, angle: angle, targetIndex: connIndex });
+            interactiveArrows.push({ targetIndex: connIndex });
         });
     }
 }
 
+
+// --- Canvas Resizing ---
 function resizeCanvas() {
     canvas.width = gameContainer.clientWidth;
     canvas.height = gameContainer.clientHeight;
+    isPortrait = canvas.width < canvas.height; // Update orientation flag
+    // If the game is active, we need to redraw after a resize
+    if (gameActive) {
+        draw();
+    }
 }
 
+// --- Event Listeners ---
 window.addEventListener('resize', resizeCanvas);
 canvas.addEventListener('click', handleCanvasClick);
 canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Prevent scrolling/zooming
     handleCanvasClick(e.touches[0]);
 }, { passive: false });
 
+// --- Initial Setup ---
 loadMenuPlayers();
 renderPlayerList();
 resizeCanvas();
