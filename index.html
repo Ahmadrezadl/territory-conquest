@@ -8,14 +8,12 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Settings menu modal -->
     <div id="settings-modal" class="modal-backdrop">
         <div class="modal-content">
             <h1 class="modal-title">Territory Conquest</h1>
             
             <div id="player-list" class="player-list">
-                <!-- Player rows will be dynamically added here -->
-            </div>
+                </div>
 
             <div class="menu-actions">
                 <button id="add-player-btn" class="btn btn-secondary">Add Player</button>
@@ -24,7 +22,6 @@
         </div>
     </div>
 
-    <!-- Game over modal -->
     <div id="game-over-modal" class="modal-backdrop hidden">
         <div class="modal-content text-center">
             <h2 id="winner-message" class="winner-message">Player 1 Wins!</h2>
@@ -33,13 +30,12 @@
         </div>
     </div>
     
-    <!-- Main game container -->
     <div id="game-container" class="hidden">
         <canvas id="game-canvas"></canvas>
+        <button id="quit-btn" class="btn btn-quit">Quit</button>
         <div id="player-info"></div>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
     <script src="script.js"></script>
 </body>

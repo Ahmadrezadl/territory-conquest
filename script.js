@@ -15,6 +15,7 @@ const playerListDiv = document.getElementById('player-list');
 const addPlayerBtn = document.getElementById('add-player-btn');
 const playBtn = document.getElementById('play-btn');
 const restartBtn = document.getElementById('restart-btn');
+const quitBtn = document.getElementById('quit-btn');
 
 // --- Game State Variables ---
 let territories = [];
@@ -109,6 +110,16 @@ addPlayerBtn.addEventListener('click', () => {
     }
 });
 
+function stopGame() {
+    cancelAnimationFrame(animationFrameId);
+    clearInterval(unitIntervalId);
+    clearInterval(botIntervalId);
+    gameActive = false;
+    settingsModal.style.display = 'flex';
+    gameContainer.classList.add('hidden');
+    gameOverModal.classList.add('hidden');
+}
+
 playBtn.addEventListener('click', () => {
     if (menuPlayers.length < 2) {
         alert("You need at least two players to start the game!");
@@ -117,7 +128,6 @@ playBtn.addEventListener('click', () => {
     settingsModal.style.display = 'none';
     gameContainer.classList.remove('hidden');
 
-    // --- FIX: Request fullscreen on game start ---
     if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(err => {
             console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
@@ -128,13 +138,11 @@ playBtn.addEventListener('click', () => {
 });
 
 restartBtn.addEventListener('click', () => {
-    gameOverModal.classList.add('hidden');
-    settingsModal.style.display = 'flex';
-    gameContainer.classList.add('hidden');
-    cancelAnimationFrame(animationFrameId);
-    clearInterval(unitIntervalId);
-    clearInterval(botIntervalId);
-    gameActive = false;
+    stopGame();
+});
+
+quitBtn.addEventListener('click', () => {
+    stopGame();
 });
 
 // --- Game Initialization ---
@@ -171,16 +179,15 @@ function startGame() {
 // --- Map Generation ---
 function generateMap(numPlayers) {
     territories = [];
-    const numTerritories = Math.max(12, numPlayers * 5);
+    const numTerritories = Math.max(15, numPlayers * 5); // Increased territory density
     const mapWidth = LOGICAL_WIDTH;
     const mapHeight = LOGICAL_HEIGHT;
-    const margin = 100; // Increased margin slightly
+    const margin = 100;
 
     const points = generatePoissonPoints(mapWidth, mapHeight, numTerritories, margin);
     
     points.forEach(p => {
-        // --- FIX: Increased node size for better visibility on small screens ---
-        const baseRadius = 45;
+        const baseRadius = 55; // <-- INCREASED NODE SIZE
         territories.push({
             x: p.x,
             y: p.y,
@@ -322,7 +329,8 @@ function ensureConnectivity() {
 
 function generatePoissonPoints(width, height, count, margin) {
     const k = 30;
-    const radius = Math.sqrt(((width - margin * 2) * (height - margin * 2)) / (count * Math.PI)) * 1.5;
+    // <-- SHORTER EDGES: Reducing the multiplier makes points closer
+    const radius = Math.sqrt(((width - margin * 2) * (height - margin * 2)) / (count * Math.PI)) * 1.2;
     const cellSize = radius / Math.sqrt(2);
     const gridWidth = Math.ceil(width / cellSize);
     const gridHeight = Math.ceil(height / cellSize);
@@ -512,57 +520,71 @@ function checkWinCondition() {
     }
 }
 
+// <-- IMPROVED AI LOGIC ---
 function runBotActions() {
     if (!gameActive) return;
     players.forEach(player => {
         if (!player.isBot || !player.isAlive) return;
+
         const myTerritories = territories.filter(t => t.owner === player.id);
         if (myTerritories.length === 0) return;
-        const actionRoll = Math.random();
-        if (actionRoll < 0.6) { // Attack
-            const possibleAttacks = [];
-            myTerritories.forEach(from => {
-                if (from.units > 10) {
-                    from.connections.forEach(toIndex => {
-                        const to = territories[toIndex];
-                        if (to.owner !== player.id && from.units > to.units + 5) {
-                            const score = (from.units - to.units) / (to.units + 1);
-                            possibleAttacks.push({ from, to, score });
-                        }
-                    });
+
+        // Strategy 1: Aggressive Expansion
+        // Bot will launch attacks from any territory that has a significant advantage.
+        myTerritories.forEach(from => {
+            if (from.units < 15) return; // Don't attack from weakly defended territories
+
+            // Find the best target from this specific territory
+            let bestTarget = null;
+            let bestScore = 0;
+
+            from.connections.forEach(toIndex => {
+                const to = territories[toIndex];
+                // Attack enemy or neutral territories
+                if (to.owner !== player.id) {
+                    // Prioritize weaker targets and territories with fewer units
+                    const score = (from.units - to.units) / (to.units + 1);
+                    if (score > bestScore && from.units > to.units + 3) {
+                        bestScore = score;
+                        bestTarget = to;
+                    }
                 }
             });
-            if (possibleAttacks.length > 0) {
-                possibleAttacks.sort((a, b) => b.score - a.score);
-                launchAttack(possibleAttacks[0].from, possibleAttacks[0].to);
-            }
-        } else if (actionRoll < 0.9) { // Reinforce
-            const vulnerableTerritories = myTerritories.filter(t => {
-                return t.connections.some(c => territories[c].owner !== player.id && territories[c].units > t.units);
-            }).sort((a, b) => a.units - b.units);
-            if (vulnerableTerritories.length > 0) {
-                const target = vulnerableTerritories[0];
-                const potentialReinforcers = target.connections
-                    .map(c => territories[c])
-                    .filter(t => t.owner === player.id && t.units > target.units && t.units > 20)
-                    .sort((a, b) => b.units - a.units);
-                if (potentialReinforcers.length > 0) {
-                    launchAttack(potentialReinforcers[0], target);
+
+            if (bestTarget) {
+                 // Only attack if it makes sense, maybe one per tick still but from multiple sources
+                if (Math.random() < 0.4) { // % chance to attack from this node
+                    launchAttack(from, bestTarget);
                 }
             }
-        } else { // Consolidate
-            const backlineTerritories = myTerritories.filter(t =>
-                t.units > 25 && t.connections.every(c => territories[c].owner === player.id)
-            ).sort((a, b) => b.units - a.units);
-            const frontlineTerritories = myTerritories.filter(t =>
-                t.connections.some(c => territories[c].owner !== player.id)
-            ).sort((a, b) => a.units - b.units);
-            if (backlineTerritories.length > 0 && frontlineTerritories.length > 0) {
-                launchAttack(backlineTerritories[0], frontlineTerritories[0]);
+        });
+
+        // Strategy 2: Reinforcement & Consolidation
+        // Move units from safe, high-unit territories to more vulnerable frontline territories.
+        const backlineTerritories = myTerritories
+            .filter(t => t.units > 30 && t.connections.every(c => territories[c].owner === player.id))
+            .sort((a, b) => b.units - a.units);
+
+        const frontlineTerritories = myTerritories
+            .filter(t => t.connections.some(c => territories[c].owner !== player.id))
+            .sort((a, b) => a.units - b.units);
+
+        if (backlineTerritories.length > 0 && frontlineTerritories.length > 0) {
+            // Find the most powerful backline territory
+            const reinforcer = backlineTerritories[0];
+            // Find the weakest frontline territory
+            const target = frontlineTerritories[0];
+            
+            // If the backline is much stronger and not already attacking, reinforce the frontline
+            if (reinforcer && target && reinforcer.units > target.units + 10) {
+                 if (Math.random() < 0.2) { // Lower chance for this so it doesn't drain backline
+                    launchAttack(reinforcer, target);
+                 }
             }
         }
     });
 }
+
 
 // --- Game Loop ---
 function gameLoop() {
@@ -602,7 +624,7 @@ function draw() {
 
     // Draw connections
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4; // Slightly thicker lines
     territories.forEach((t, i) => {
         t.connections.forEach(connIndex => {
             if (i < connIndex) {
@@ -633,12 +655,12 @@ function draw() {
 
         if (t === selectedTerritory) {
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 6; // Thicker selection
             ctx.stroke();
         }
 
         ctx.fillStyle = 'white';
-        ctx.font = `bold ${t.radius / 1.8}px Poppins`;
+        ctx.font = `bold ${t.radius / 1.5}px Poppins`; // Larger font
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
@@ -658,21 +680,20 @@ function draw() {
         const currentX = from.x + dx * attack.progress;
         const currentY = from.y + dy * attack.progress;
         ctx.beginPath();
-        ctx.arc(currentX, currentY, 12, 0, Math.PI * 2);
+        ctx.arc(currentX, currentY, 15, 0, Math.PI * 2); // Larger attack circles
         ctx.fillStyle = players[attack.owner].color;
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.fillStyle = 'white';
-        ctx.font = 'bold 14px Poppins';
+        ctx.font = 'bold 16px Poppins'; // Larger text on attacks
         ctx.fillText(attack.units, currentX, currentY);
     });
 
     ctx.restore();
 }
 
-// --- FIX: Correctly calculate arrow positions during the draw phase ---
 function drawInteractiveArrows() {
     if (!selectedTerritory) return;
 
@@ -680,9 +701,8 @@ function drawInteractiveArrows() {
         const from = selectedTerritory;
         const to = territories[arrow.targetIndex];
         
-        // Calculate position and angle dynamically
         const angle = Math.atan2(to.y - from.y, to.x - from.x);
-        const arrowOffset = from.radius + 30; // Offset from the center of the territory
+        const arrowOffset = from.radius + 40; // Increased offset
         const x = from.x + arrowOffset * Math.cos(angle);
         const y = from.y + arrowOffset * Math.sin(angle);
 
@@ -693,10 +713,10 @@ function drawInteractiveArrows() {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        // Made arrow bigger for easier clicking
-        ctx.moveTo(0, -20);
-        ctx.lineTo(30, 0);
-        ctx.lineTo(0, 20);
+        // <-- BIGGER ARROWS
+        ctx.moveTo(0, -25);
+        ctx.lineTo(40, 0);
+        ctx.lineTo(0, 25);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
@@ -731,19 +751,18 @@ function handleCanvasClick(event) {
         logicalY = (clickY - offsetY) / scale;
     }
 
-    // --- FIX: Correctly calculate arrow position for click detection ---
     if (selectedTerritory) {
         for (const arrow of interactiveArrows) {
             const from = selectedTerritory;
             const to = territories[arrow.targetIndex];
             
             const angle = Math.atan2(to.y - from.y, to.x - from.x);
-            const arrowOffset = from.radius + 30;
+            const arrowOffset = from.radius + 40; // Match new offset
             const arrowX = from.x + arrowOffset * Math.cos(angle);
             const arrowY = from.y + arrowOffset * Math.sin(angle);
 
-            // Check distance from click to the arrow's calculated position
-            if (Math.hypot(logicalX - arrowX, logicalY - arrowY) < 30) { // Increased hit area
+            // <-- BIGGER HIT AREA for arrows
+            if (Math.hypot(logicalX - arrowX, logicalY - arrowY) < 40) {
                 launchAttack(from, to);
                 selectedTerritory = null;
                 interactiveArrows = [];
@@ -759,7 +778,6 @@ function handleCanvasClick(event) {
 
     if (clickedTerritory && clickedTerritory.owner !== null && !players[clickedTerritory.owner].isBot) {
         selectedTerritory = clickedTerritory;
-        // The arrow objects just need the target index. Positions are calculated in the draw loop.
         selectedTerritory.connections.forEach(connIndex => {
             interactiveArrows.push({ targetIndex: connIndex });
         });
